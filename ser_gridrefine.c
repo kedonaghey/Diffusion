@@ -75,71 +75,103 @@ void PrintGrid(double** mat, int nrows, int ncols, FILE *fp)
 
 }
 
-void InjectCoarsePoints(double**mat, int nrows, int ncols, int crs, int ccs)
+void InjectCoarsePoints(double* toparray, double* rightarray, double** mat, int nrows, int ncols, int crs, int ccs, double corner)
 {
   int i, j;
+  int test[3] = {1,2,3};
   //top
   for (i = 1; i < ccs; i++)
-      mat[nrows-crs][i] = 50;//0
+      mat[nrows-crs][i] = test[i-1];//toparray[i-1];//0
   //right
   for(i = nrows-2; i > nrows - crs; i--)
-      mat[i][ccs - 1] = 60;//100
+      mat[i][ccs - 1] = test[i-crs-1];//rightarray[i-crs-1];//100
   //corner
-  mat[nrows-crs][ccs-1] = 100;
+  mat[nrows-crs][ccs-1] = corner;
 }
 
-void InjectFinePoints(double** mat, int nrows, int ncols)
+void InjectFinePoints(double* toparray, double* rightarray, double** mat, int nrows, int ncols, double corner)
 {
   int i, j;
+  int test[7] = {1,2,3,4,5,6,7};
   //top
   for (i = 1; i < ncols - 1; i++)
-      mat[0][i] = 40;//0
+      mat[0][i] = test[i-1];//toparray[i-1];//0
   //right
   for(i = 1; i < nrows - 1; i++)
-      mat[i][ncols - 1] = 30;//100
+      mat[i][ncols - 1] = test[i-1];//rightarray[i-1];//100
   //corner
   //double check
-  mat[0][ncols-1] = 1;
+  mat[0][ncols-1] = corner;
 }
 
 /****    Interface Points *****/
+//for bound points use regular matrix
 
-
-double Compute_CornerTimeStep(double** mat1_refine, double** mat1, int i, int j, double* converge, double dt, double dx, double dy)
+double Compute_CornerTimeStep(double** mat1_refine, double** mat1, int i, int j, int m, int n, double dt, double dx, double dy)
 {
-
+  double mat1_corner;
+  double mat2_corner;
   double wxy = 0;
   double k = .02, diff = 0;
   wxy = k * dt/(dx*dx);
 
-  mat2_refine[i][j] = /*prev point*/mat1_refine[i][j] + wxy * (16/15) * (/*prev point*/-4*mat1_refine[i][j] + .5 * /*bound*/mat1_refine[i][j-2]/
-  + /*course*/mat1_refine[i+2][j] + .5 * /*course*/mat1_refine[i-2][j] +/*bound*/ mat1_refine[i][j+4] +/*mesh*/ mat1_refine[i-1][j-1]);
+  mat2_corner = /*prev point*/mat1_corner + wxy * (16/15) * (/*prev point*/-4*mat1_corner+ .5 * /*bound*/mat1[i][j-1]\
+  + /*coarse*/mat1[i+1][j] + .5 * /*coarse*/mat1[i-1][j] +/*bound*/ mat1[i][j+1] +/*mesh*/ mat1_refine[m+1][n-1]);
 
- return mat2_refine[i][j];
+ return mat2_corner;
+}
+
+//need to add in different
+
+void Compute_InterfaceRightTimeStep(double* rightarray, double** mat1_refine, double** mat1, int nrows, int ncols, int i, int m, double dt, double dx, double dy, int crs)
+{
+  int j, n = 1, t = 0;
+  double wxy = 0;
+  double k = .02, diff = 0;
+  wxy = k * dt/(dx*dx);
+
+  //actually probably dont need
+  //if (i,j-1) from corner or (i-1,j) from corner - substitute in corner
+  //else do the following
+  //do one for loop hardcode i,m stays same
+    for (j = nrows-2; j > nrows-crs; j--)
+    {
+      rightarray[t] =/*previous interface point*/ mat1[i][j] + /*previous interface point*/ mat1[i][j] * wxy * (dx/2) + wxy * (4/3) * \
+      (/*previous interface point*/- 4*mat1[i][j] + /*coarse*/mat1[i+1][j]  + /*coarse*/ .5 * mat1[i][j+1]\
+      +/*coarse*/ .5 * mat1[i][j-1] +/*refine*/ .5 * mat1_refine[m+1][n+1] +/*refine*/ mat1_refine[m+1][n] +/*refine*/ .5 * mat1_refine[m+1][n-1]);//changed one n to - dif\
+      ferent from the book
+      n+=2;
+      t++;
+    }
+
+
 }
 
 
-void Compute_InterfaceTimeStep(double** mat1_refine, double** mat1, int nrows, int ncols, double* converge, double dt, double dx, double dy)
+void Compute_InterfaceTopTimeStep(double* toparray, double** mat1_refine, double** mat1, int nrows, int ncols, int j, int n,double dt, double dx, double dy, int ccs)
 {
-
-  int i,j;
+  int i, m = 1, t = 0;
   double wxy = 0;
   double k = .02, diff = 0;
   wxy = k * dt/(dx*dx);
 
-  for (i = 1; i < nrows - 1; i++)
+
+  //actually probably dont need
+  //if (i,j-1) from corner or (i-1,j) from corner - substitute in corner
+  //else do the following
+  //do one for loop hardcode j,n stays same
+  //after declare m/n += 2 ??
+  for (i = 1; i < ccs; i++)
   {
-    for (j = 1; j < ncols - 1; j++)
-    {
-      mat2_refine[i][j] = mat1_refine[i][j] + mat1_refine[i][j] * wxy * (dx/2) + wxy * (4/3) * (- 4*mat1_refine[i][j] + mat1_refine[i+2][j]  + .5 * mat1_refine[i][j+2]/
-      + .5 * mat1_refine[i][j-2] + .5 * mat1_refine[i-1][j+1] + mat1_refine[i-1][j] + .5 * mat1_refine[i-1][j+1]);
-    }
+      toparray[t] = /*previous interface point*/mat1[i][j] + /*prev interface point*/mat1[i][j] * wxy * (dx/2) + wxy * (4/3) * \
+      (-/*prev interface point*/ 4*mat1_refine[i][j] +/*coarse*/ mat1[i][j+1]  +/*coarse*/ .5 * mat1_refine[i+1][j]\
+      +/*coarse*/ .5 * mat1_refine[i-1][j] +/*refine*/ .5 * mat1_refine[m+1][n-1] +/*refine*/ mat1_refine[m][n-1] +/*refine*/ .5 * mat1_refine[m-1][n-1]);
+      m+=2;
+      t++;
   }
 
 
 }
-
-
 
 
 void Compute_FineTimeStep(double** mat1_refine, double** mat2_refine, int nrows, int ncols, double* converge, double dt, double dx, double dy)
@@ -158,7 +190,7 @@ void Compute_FineTimeStep(double** mat1_refine, double** mat2_refine, int nrows,
     {
       mat2_refine[i][j] = mat1_refine[i][j] + wxy * sxy * sxy * mat1_refine[i][j] + wxy * ( .5 * (mat1_refine[i+1][j+1] + mat1_refine[i+1][j-1])\
       -2 * mat1_refine[i][j] + mat1_refine[i-1][j]);
-      if ( diff < fabs(mat2_refine[i][j] - mat1_refine[i][j]))
+/*      if ( diff < fabs(mat2_refine[i][j] - mat1_refine[i][j]))
       {
         diff = fabs(mat1_refine[i][j] - mat2_refine[i][j]);
       }
@@ -166,15 +198,16 @@ void Compute_FineTimeStep(double** mat1_refine, double** mat2_refine, int nrows,
   }
 
   *converge = diff;  
-
-  for(i = 0; i < nrows; i++)
+*/
+}}
+/*  for(i = 0; i < nrows; i++)
   {
     for(j = 0; j < ncols; j++)
     {
       mat1_refine[i][j] = mat2_refine[i][j];
     }
   }
-
+*/
 }
 
 void Compute_TimeStep(double** mat1, double** mat2, int nrows, int ncols, double* converge, double dt, double dx, double dy)
@@ -207,7 +240,7 @@ void Compute_TimeStep(double** mat1, double** mat2, int nrows, int ncols, double
     for (j = 1; j < ncols -1; j++)
     {
       mat2[i][j] = mat1[i][j] + wx * (mat1[i+1][j] - 2*mat1[i][j] + mat1[i-1][j]) + wy * (mat1[i][j+1] - 2 * mat1[i][j] + mat1[i][j-1]);
-      if ( diff < fabs(mat2[i][j] - mat1[i][j]))
+/*      if ( diff < fabs(mat2[i][j] - mat1[i][j]))
       {
         diff = fabs(mat1[i][j] - mat2[i][j]);
       }
@@ -215,17 +248,26 @@ void Compute_TimeStep(double** mat1, double** mat2, int nrows, int ncols, double
   }
 
   	*converge = diff;  
-
-  for(i = 0; i < nrows; i++)
+*/}}
+/*  for(i = 0; i < nrows; i++)
   {
     for(j = 0; j < ncols; j++)
     {
       mat1[i][j] = mat2[i][j];
     }
   }
-
+*/
 }
 
+void Update(double** mat1, double** mat2, int nrows, int ncols)
+{
+  int i, j;
+  for(i = 0; i < nrows; i++)
+  {
+    for(j = 0; j < ncols; j++)
+      mat1[i][j] = mat2[i][j];
+  }
+}
 
 int main(int argc, char *argv[])
 {
@@ -236,7 +278,9 @@ int main(int argc, char *argv[])
   //size of grid
   int nrows = 10, ncols = 10;
   //2x2 for mesh in a 4x4 array
-  double refrows = 5, refcols = 5;
+  int szofmesh = 4;
+  int refrows = szofmesh * 2 + 1;
+  int refcols = szofmesh * 2 + 1;
   double dx = 0, dy= 0, dt, time;
   double converge = 0, epsilon;
   int iter, max_iter = 100;
@@ -278,8 +322,23 @@ int main(int argc, char *argv[])
   InitFineGrid(mat1_refine, refrows, refcols);
   InitFineGrid(mat2_refine, refrows, refcols); 
 
+  //arrays to store interfaces
+  double *toparray, *rightarray;
+  int szarray = szofmesh - 1;
+  toparray = calloc(szarray, sizeof(double));
+  rightarray = calloc(szarray, sizeof(double));
+
   time = 0;
 
+  //Corner Points
+  //coarse
+  int ci = nrows - crs;
+  int cj = ccs - 1;
+  //fine
+  int fi = 0;
+  int fj = refcols - 1;
+
+  //Printgrid(mat1,nrows,ncols);
   fp = fopen ( output_file, "w" );
   start = clock();
   for(iter = 0; iter < max_iter; iter++)
@@ -290,24 +349,31 @@ int main(int argc, char *argv[])
       time = time + dt;
       Compute_TimeStep(mat1, mat2, nrows, ncols, &converge, dt, dx, dy);
       Compute_FineTimeStep(mat1_refine, mat2_refine, refrows, refcols, &converge, dt, dx, dy);
-      Compute_InterfaceTimeStep();
-      Compute_CornerTimeStep();
-      InjectCoarsePoints(mat1, nrows, ncols, crs, ccs);
-      InjectFinePoints(mat1_refine, refrows, refcols);
-      /*if (iter%100 == 0)
-      { 
-        printf("%d %f\n", iter, converge);
-        fprintf(fp, "\n");
+      //Compute Interfaces
+      Compute_InterfaceRightTimeStep(rightarray, mat1_refine, mat1, nrows, ncols, ci, fi, dt, dx, dy, crs);
+      Compute_InterfaceTopTimeStep(toparray, mat1_refine, mat1, nrows, ncols, cj, fj, dt, dx, dy, ccs);
+      double corner = Compute_CornerTimeStep(mat1_refine, mat1, ci, cj, fi, fj, dt, dx, dy);
+      InjectCoarsePoints(toparray, rightarray, mat2, nrows, ncols, crs, ccs, 100/*corner*/);
+      InjectFinePoints(toparray, rightarray, mat2_refine, refrows, refcols, 100/*corner*/);
+      Update(mat1, mat2, nrows, ncols);
+      Update(mat1_refine, mat2_refine, refrows, refcols);
+      //if (iter%100 == 0)
+      //{ 
+      //  printf("%d %f\n", iter, converge);
+      //  fprintf(fp, "\n");
 	    //prnt = 2 * prnt;
-      }*/
+      //}
       iter++;
-      if (converge < epsilon)
-       	break;
+  //    if (converge < epsilon)
+    //   	break;
     //}
   }
   end = clock();
 
+  mat1[0][0] = 123456;
   Printgrid(mat1_refine,refrows,refcols);
+  printf("\n");
+  Printgrid(mat1,nrows,ncols);
   //fprintf ( fp, "%d\n", nrows );
   //fprintf ( fp, "%d\n", ncols );
 
